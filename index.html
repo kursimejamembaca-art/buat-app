@@ -22,26 +22,26 @@
 <body>
 <h2>Buat Aplikasi dan Game Android Otomatis</h2>
 
-<form id="f">
+<form id="f" autocomplete="off">
   <label>Token GitHub (scope: repo)</label>
-  <input name="gh" type="password" required>
+  <input name="gh" type="password" autocomplete="off" required>
 
   <label>Token Codemagic</label>
-  <input name="cm" type="password" required>
+  <input name="cm" type="password" autocomplete="off" required>
 
   <label>Team ID Codemagic <span class="small">(opsional. Biasanya otomatis. Jika gagal, isi dari alamat codemagic.io/teams/ID)</span></label>
-  <input name="team_id">
+  <input name="team_id" autocomplete="off">
 
   <label>Jenis</label>
   <select name="jenis" id="jenis">
-    <option value="app">Aplikasi biasa</option>
+    <option value="app" selected>Aplikasi biasa</option>
     <option value="game_sederhana">Game 2D sederhana (tanpa paket)</option>
     <option value="game_flame">Game 2D dengan Flame (gambar, animasi, fisika)</option>
   </select>
 
   <label>Penyedia AI</label>
   <select name="provider" id="provider">
-    <option value="anthropic">Anthropic (Claude)</option>
+    <option value="anthropic" selected>Anthropic (Claude)</option>
     <option value="gemini">Google Gemini</option>
     <option value="openai">OpenAI (ChatGPT)</option>
     <option value="custom">Lainnya (kompatibel OpenAI, mis. DeepSeek, Groq)</option>
@@ -49,36 +49,36 @@
   </select>
 
   <label>Base URL API <span class="small">(hanya untuk Lainnya, contoh: https://api.deepseek.com/v1)</span></label>
-  <input name="baseurl" id="baseurl" placeholder="https://api.deepseek.com/v1">
+  <input name="baseurl" id="baseurl" placeholder="https://api.deepseek.com/v1" autocomplete="off">
 
-  <label>Model <span class="small">(ganti jika ada model baru. Untuk Lainnya, isi manual)</span></label>
-  <input name="model" id="model">
+  <label>Model <span class="small">(sudah terisi otomatis. Untuk Lainnya, isi manual)</span></label>
+  <input name="model" id="model" value="claude-sonnet-5-5" autocomplete="off">
 
   <label>API key AI <span class="small">(kosongkan hanya jika memilih Tanpa AI atau memakai Tempel hasil AI)</span></label>
-  <input name="key" type="password">
+  <input name="key" type="password" autocomplete="off">
 
   <label>Nama aplikasi</label>
-  <input name="nama" required placeholder="Catatan Harian atau Kucing Lompat">
+  <input name="nama" required placeholder="Catatan Harian atau Kucing Lompat" autocomplete="off">
 
   <label>Fitur atau deskripsi <span class="small">(makin rinci, makin baik)</span></label>
-  <textarea name="fitur" rows="5" placeholder="Aplikasi: catat tulisan harian dengan judul dan tanggal, cari, edit, dan hapus.
+  <textarea name="fitur" rows="5" autocomplete="off" placeholder="Aplikasi: catat tulisan harian dengan judul dan tanggal, cari, edit, dan hapus.
 Game: seekor kucing melompati rintangan, skor bertambah tiap rintangan terlewati, game over jika menabrak."></textarea>
 
-  <label>Paket tambahan <span class="small">(satu per baris, format nama: versi)</span></label>
-  <textarea name="deps" id="deps" rows="2" placeholder="flame: ^1.18.0"></textarea>
+  <label>Paket tambahan <span class="small">(kosong untuk aplikasi biasa. Satu per baris, format nama: versi)</span></label>
+  <textarea name="deps" id="deps" rows="2" autocomplete="off"></textarea>
 
   <label>Aset: gambar, suara, atau file lain <span class="small">(opsional)</span></label>
   <input id="assets" type="file" multiple accept="image/*,audio/*,.json,.txt">
   <div class="small">Gambar masuk ke assets/images/, suara ke assets/audio/. Gunakan nama file tanpa spasi, misalnya kucing.png.</div>
 
   <label>Tempel hasil AI <span class="small">(opsional, jika AI tidak bisa dipanggil dari browser)</span></label>
-  <textarea name="manual" rows="4" placeholder="Tempel seluruh jawaban AI, termasuk baris === FILE: lib/main.dart ==="></textarea>
+  <textarea name="manual" rows="4" autocomplete="off" placeholder="Tempel seluruh jawaban AI, termasuk baris === FILE: lib/main.dart ==="></textarea>
 
   <label>Domain paket (huruf kecil, unik)</label>
-  <input name="domain" required value="com.namadomainmu" placeholder="com.budi">
+  <input name="domain" required value="com.namadomainmu" placeholder="com.budi" autocomplete="off">
 
   <label>Codemagic App ID <span class="small">(opsional. Kosongkan jika aplikasi baru)</span></label>
-  <input name="app_id">
+  <input name="app_id" autocomplete="off">
 
   <button type="submit" id="mulai">Mulai</button>
   <button type="button" id="copyprompt">Salin prompt untuk AI lain</button>
@@ -110,6 +110,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const enc = s => btoa(unescape(encodeURIComponent(s)));
 let resumeFn = null;
 
+window.addEventListener("error", e => log("❌ Error skrip: " + e.message));
+
 const MODEL_DEFAULT = { anthropic: "claude-sonnet-5-5", openai: "gpt-4o", gemini: "gemini-2.5-flash", custom: "" };
 const PROVIDER_LABEL = { anthropic: "Anthropic", gemini: "Google Gemini", openai: "OpenAI", custom: "penyedia lain", none: "tanpa AI" };
 const JENIS_DEPS = { app: "", game_sederhana: "", game_flame: "flame: ^1.18.0" };
@@ -119,16 +121,26 @@ const JENIS_LABEL = {
   game_flame: "Game 2D memakai paket flame. Gunakan GameWidget dan kelas yang meng-extend FlameGame. Untuk gambar, gunakan SpriteComponent atau SpriteAnimationComponent dengan images.load. Ikuti API Flame sesuai versi paket."
 };
 
-function syncProvider() {
-  $("model").value = MODEL_DEFAULT[$("provider").value] || "";
+// Isi default model saat penyedia berubah
+function onProviderChange() {
+  const p = $("provider").value;
+  if (MODEL_DEFAULT[p] !== undefined) $("model").value = MODEL_DEFAULT[p];
 }
-function syncJenis() { $("deps").value = JENIS_DEPS[$("jenis").value] || ""; }
-$("provider").addEventListener("change", syncProvider);
-$("jenis").addEventListener("change", syncJenis);
-syncProvider();
-syncJenis();
 
-// Panggilan HTTP dengan pesan error yang lebih jelas
+// Isi default paket saat jenis berubah, hanya jika kolom masih kosong atau berisi default lama
+function onJenisChange() {
+  const cur = $("deps").value.trim();
+  const isDefault = Object.values(JENIS_DEPS).includes(cur);
+  if (cur === "" || isDefault) $("deps").value = JENIS_DEPS[$("jenis").value] || "";
+}
+
+$("provider").addEventListener("change", onProviderChange);
+$("jenis").addEventListener("change", onJenisChange);
+
+// Kondisi awal: pastikan nilai default selalu terisi
+if (!$("model").value.trim()) onProviderChange();
+if (!$("deps").value.trim()) onJenisChange();
+
 async function http(method, url, headers = {}, body) {
   const opt = { method, headers: { ...headers } };
   if (body !== undefined) {
@@ -139,7 +151,7 @@ async function http(method, url, headers = {}, body) {
   try {
     r = await fetch(url, opt);
   } catch (e) {
-    throw new Error(`Gagal terhubung ke ${url}. Periksa koneksi internet. Jika koneksi normal, browser kemungkinan memblokir permintaan (CORS).`);
+    throw new Error(`Tidak bisa terhubung ke ${url}. Periksa koneksi internet. Jika koneksi normal, browser kemungkinan memblokir permintaan (CORS).`);
   }
   const t = await r.text();
   if (!r.ok) throw new Error(`HTTP ${r.status} ${url}: ${t.slice(0, 300)}`);
@@ -172,6 +184,7 @@ function randPw() {
 }
 
 function makeKeystore(nama, pw) {
+  if (typeof forge === "undefined") throw new Error("Pustaka keystore (node-forge) belum termuat. Periksa koneksi internet, lalu muat ulang halaman.");
   const keys = forge.pki.rsa.generateKeyPair(2048);
   const cert = forge.pki.createCertificate();
   cert.publicKey = keys.publicKey;
@@ -275,7 +288,6 @@ Contoh format:
 (isi file pemain.dart)`;
 }
 
-// Mengambil teks jawaban AI dan memastikan tidak kosong
 async function callAI(provider, key, model, baseUrl, prompt) {
   let text = "";
   if (provider === "anthropic") {
@@ -286,7 +298,6 @@ async function callAI(provider, key, model, baseUrl, prompt) {
     }, { model, max_tokens: 8000, messages: [{ role: "user", content: prompt }] });
     text = (r.content || []).filter(b => b.type === "text").map(b => b.text).join("");
   } else if (provider === "gemini") {
-    // Kunci dikirim lewat header, bukan di alamat URL
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
     const r = await http("POST", url, { "x-goog-api-key": key }, { contents: [{ parts: [{ text: prompt }] }] });
     text = ((r.candidates || [])[0]?.content?.parts || []).map(p => p.text || "").join("");
@@ -483,23 +494,4 @@ async function waitBuild(cmTok, bid) {
   return b;
 }
 
-async function downloadArtifacts(cmTok, b, buildPage) {
-  const arts = (b.artifacts || []).filter(a => /\.(aab|apk)$/i.test(a.name || ""));
-  if (!arts.length) {
-    log(`   ⚠ AAB/APK tidak ditemukan di data API. Buka ${buildPage} → Artifacts.`);
-    return;
-  }
-  for (const a of arts) {
-    try {
-      const r = await fetch(a.url, { headers: cm(cmTok) });
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      resultLink(a.name, await r.blob());
-      log(`   ✔ ${a.name} siap diunduh.`);
-    } catch (e) {
-      log(`   ⚠ ${a.name} gagal diunduh otomatis (${e.message.slice(0, 80)}).`);
-      const link = document.createElement("a");
-      link.href = buildPage;
-      link.target = "_blank";
-      link.textContent = "Buka halaman build untuk unduh " + a.name;
-      $("downloads").appendChild(link);
-      
+async funct
