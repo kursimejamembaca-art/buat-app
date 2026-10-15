@@ -6,66 +6,99 @@
 <title>Buat Aplikasi Android Otomatis</title>
 <script src="https://cdn.jsdelivr.net/npm/node-forge@1.3.1/dist/forge.min.js"></script>
 <style>
-  body{font-family:system-ui,sans-serif;max-width:640px;margin:auto;padding:16px;line-height:1.4}
+  body{font-family:system-ui,sans-serif;max-width:680px;margin:auto;padding:16px;line-height:1.4}
+  h3{margin-top:28px;border-bottom:1px solid #ddd;padding-bottom:4px}
   label{display:block;font-weight:600;margin-top:12px}
   input,textarea,select{width:100%;box-sizing:border-box;padding:8px;margin-top:4px;font-size:15px}
-  button{padding:10px 16px;margin-top:16px;font-size:15px;cursor:pointer}
+  button{padding:10px 14px;margin-top:12px;font-size:15px;cursor:pointer;margin-right:6px}
   #log{background:#111;color:#8f8;padding:12px;white-space:pre-wrap;min-height:140px;border-radius:6px;margin-top:16px;font-size:13px}
   .box{background:#fff8dc;border:1px solid #e0c060;padding:12px;border-radius:6px;margin-top:12px;display:none}
   .box a{display:block;margin-top:8px}
   .small{font-size:13px;color:#555;font-weight:normal}
+  .prompt{font-family:monospace;font-size:13px;min-height:200px}
 </style>
 </head>
 <body>
 <h2>Buat Aplikasi Android Otomatis</h2>
 
-<form id="f">
+<form id="f" autocomplete="off">
+
+  <h3>1. Akun</h3>
   <label>Token GitHub (scope: repo)</label>
   <input name="gh" type="password" required>
 
   <label>Token Codemagic</label>
   <input name="cm" type="password" required>
 
-  <label>Penyedia AI</label>
-  <select name="provider" id="provider">
-    <option value="anthropic" selected>Anthropic (Claude)</option>
-    <option value="gemini">Google Gemini</option>
-    <option value="openai">OpenAI (ChatGPT)</option>
-    <option value="custom">Lainnya (kompatibel OpenAI, mis. DeepSeek, Groq)</option>
-    <option value="none">Tanpa AI (kode contoh sederhana)</option>
+  <h3>2. Spesifikasi aplikasi</h3>
+  <label>Nama aplikasi</label>
+  <input name="nama" id="nama" required placeholder="Buku Tanggal">
+
+  <label>Tujuan aplikasi <span class="small">(apa yang dibantu oleh aplikasi ini)</span></label>
+  <input name="tujuan" id="tujuan" placeholder="Mencatat kegiatan harian per tanggal">
+
+  <label>Layar utama <span class="small">(apa yang terlihat saat aplikasi dibuka)</span></label>
+  <textarea name="layar" id="layar" rows="2" placeholder="Daftar catatan per tanggal dengan tombol tambah di kanan bawah"></textarea>
+
+  <label>Fitur wajib <span class="small">(satu per baris)</span></label>
+  <textarea name="fitur" id="fitur" rows="4" placeholder="Tambah catatan dengan judul, isi, dan tanggal&#10;Edit dan hapus catatan&#10;Cari catatan berdasarkan kata"></textarea>
+
+  <label>Data yang disimpan <span class="small">(kosongkan jika data hanya selama aplikasi berjalan)</span></label>
+  <input name="data" id="data" placeholder="Catatan disimpan di HP sehingga tetap ada setelah aplikasi ditutup">
+
+  <label>Gaya tampilan</label>
+  <select name="gaya" id="gaya">
+    <option value="indigo" selected>Material 3, warna utama indigo</option>
+    <option value="hijau">Material 3, warna utama hijau</option>
+    <option value="gelap">Tema gelap dengan aksen ungu</option>
   </select>
 
-  <label>Base URL API <span class="small">(hanya untuk Lainnya, contoh: https://api.deepseek.com/v1)</span></label>
-  <input name="baseurl" id="baseurl" placeholder="https://api.deepseek.com/v1" autocomplete="off">
-
-  <label>Model <span class="small">(terisi otomatis. Untuk Lainnya, isi manual)</span></label>
-  <input name="model" id="model" value="claude-sonnet-5-5" autocomplete="off">
-
-  <label>API key AI <span class="small">(kosongkan jika Tanpa AI)</span></label>
-  <input name="key" type="password" autocomplete="off">
-
-  <label>Nama aplikasi</label>
-  <input name="nama" required placeholder="Catatan Harian">
-
-  <label>Fitur utama</label>
-  <textarea name="fitur" rows="3" placeholder="catat tulisan harian dan tampilkan daftar catatan"></textarea>
-
-  <label>Domain paket (unik, jangan com.example)</label>
+  <label>Domain paket (huruf kecil, unik)</label>
   <input name="domain" required value="com.namadomainmu" placeholder="com.budi">
 
-  <label>Codemagic App ID (opsional, kosongkan untuk mendaftar otomatis)</label>
+  <label>Codemagic App ID <span class="small">(opsional, kosongkan untuk aplikasi baru)</span></label>
   <input name="app_id">
+
+  <h3>3. Prompt untuk AI</h3>
+  <button type="button" id="buatprompt">Buat prompt dari spesifikasi</button>
+  <button type="button" id="salinprompt">Salin prompt</button>
+  <button type="button" id="bukacanvas">Buka Gemini</button>
+
+  <label>Prompt <span class="small">(bisa diedit sebelum disalin)</span></label>
+  <textarea name="prompt" id="prompt" class="prompt" placeholder="Tekan Buat prompt dari spesifikasi"></textarea>
+
+  <h3>4. Kode aplikasi (pilih salah satu)</h3>
+  <label>Tempel hasil Gemini Canvas <span class="small">(salin kode dari Canvas, lalu tempel di sini)</span></label>
+  <textarea name="manual" rows="6" placeholder="Tempel kode dari Gemini Canvas. Bisa berupa satu blok lib/main.dart, atau beberapa file dengan baris === FILE: lib/main.dart ==="></textarea>
+
+  <label>Penyedia AI <span class="small">(hanya jika tidak memakai Canvas)</span></label>
+  <select name="provider" id="provider">
+    <option value="none" selected>Tanpa AI (hanya jika sudah menempel kode)</option>
+    <option value="gemini">Google Gemini</option>
+    <option value="anthropic">Anthropic (Claude)</option>
+    <option value="openai">OpenAI (ChatGPT)</option>
+    <option value="custom">Lainnya (kompatibel OpenAI)</option>
+  </select>
+
+  <label>Base URL API <span class="small">(hanya untuk Lainnya)</span></label>
+  <input name="baseurl" id="baseurl" placeholder="https://api.deepseek.com/v1" autocomplete="off">
+
+  <label>Model</label>
+  <input name="model" id="model" autocomplete="off">
+
+  <label>API key AI <span class="small">(kosongkan jika memakai Canvas)</span></label>
+  <input name="key" type="password" autocomplete="off">
 
   <button type="submit" id="mulai">Mulai</button>
 </form>
 
 <div class="box" id="box">
   <b>Langkah manual (sekali saja):</b><br>
-  1. Unduh dua file di bawah ini.<br>
+  1. Unduh kedua file di bawah.<br>
   2. Buka Codemagic → Team settings → Code signing identities → Android keystore.<br>
-  3. Upload file <code>.p12</code>. Reference name: <code>upload_keystore</code>.<br>
-  4. Isi alias dan password dari file <code>key.txt</code>.<br>
-  5. Simpan, lalu tekan tombol di bawah.<br>
+  3. Upload file <code>.p12</code>. Reference name huruf kecil semua: <code>upload_keystore</code>.<br>
+  4. Alias: <code>upload</code>. Keystore password dan Key password: isi dari file key.txt.<br>
+  5. Simpan, lalu tekan tombol di bawah.
   <div id="files"></div>
   <button id="lanjut">Lanjut (keystore sudah diupload)</button>
 </div>
@@ -80,16 +113,87 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const enc = s => btoa(unescape(encodeURIComponent(s)));
 let resumeFn = null;
 
-const MODEL_DEFAULT = { anthropic: "claude-sonnet-5-5", gemini: "gemini-2.5-flash", openai: "gpt-4o", custom: "", none: "" };
-const PROVIDER_LABEL = { anthropic: "Anthropic", gemini: "Google Gemini", openai: "OpenAI", custom: "penyedia lain", none: "tanpa AI" };
+const MODEL_DEFAULT = { gemini: "gemini-3.8-flash", anthropic: "claude-sonnet-5-5", openai: "gpt-4o", custom: "", none: "" };
+const PROVIDER_LABEL = { gemini: "Google Gemini", anthropic: "Anthropic", openai: "OpenAI", custom: "penyedia lain", none: "tanpa AI" };
+const GAYA_LABEL = {
+  indigo: "Material 3 dengan warna utama indigo",
+  hijau: "Material 3 dengan warna utama hijau",
+  gelap: "tema gelap dengan aksen ungu"
+};
+
+// ---------- Form ----------
 
 function onProviderChange() {
   const p = $("provider").value;
-  $("model").value = MODEL_DEFAULT[p] || "";
-  $("baseurl").parentElement; // Base URL selalu terlihat, hanya dipakai untuk Lainnya
+  if (MODEL_DEFAULT[p] !== undefined) $("model").value = MODEL_DEFAULT[p];
 }
 $("provider").addEventListener("change", onProviderChange);
 if (!$("model").value.trim()) onProviderChange();
+
+function formSpec() {
+  return {
+    nama: $("nama").value.trim(),
+    tujuan: $("tujuan").value.trim(),
+    layar: $("layar").value.trim(),
+    fitur: $("fitur").value.trim(),
+    data: $("data").value.trim(),
+    gaya: $("gaya").value
+  };
+}
+
+// Menyusun prompt dari isi spesifikasi
+function buildPrompt(s) {
+  const fiturList = s.fitur
+    ? s.fitur.split("\n").map(x => x.trim()).filter(Boolean).map(x => "- " + x).join("\n")
+    : "- (belum ditentukan, buat fitur dasar yang masuk akal)";
+  return `Buatkan aplikasi Flutter untuk Android bernama "${s.nama}".
+
+Tujuan aplikasi: ${s.tujuan || "belum ditentukan"}
+
+Layar utama: ${s.layar || "satu layar utama yang sederhana"}
+
+Fitur wajib:
+${fiturList}
+
+Data yang disimpan: ${s.data || "tidak ada. Data hanya ada selama aplikasi berjalan"}
+
+Gaya tampilan: ${GAYA_LABEL[s.gaya] || GAYA_LABEL.indigo}
+
+Bahasa antarmuka: Bahasa Indonesia.
+
+Aturan:
+- Hanya gunakan Flutter SDK (package:flutter/material.dart). Jangan memakai paket pihak ketiga.
+- Kode harus bisa dikompilasi tanpa error. Periksa import, tanda kurung, tipe data, dan nama variabel.
+- Sertakan validasi input dan penanganan keadaan kosong.
+- Tulis SATU file lengkap lib/main.dart yang berisi fungsi main().
+- Berikan kode saja dalam satu blok kode Dart, tanpa penjelasan panjang.`;
+}
+
+$("buatprompt").addEventListener("click", () => {
+  const s = formSpec();
+  if (!s.nama) { log("⚠ Isi nama aplikasi dulu."); return; }
+  $("prompt").value = buildPrompt(s);
+  log("Prompt dibuat dari spesifikasi. Kamu bisa mengeditnya sebelum disalin.");
+});
+
+$("salinprompt").addEventListener("click", async () => {
+  if (!$("prompt").value.trim()) $("prompt").value = buildPrompt(formSpec());
+  const text = $("prompt").value;
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    $("prompt").select();
+    document.execCommand("copy");
+  }
+  log("Prompt disalin. Tempel di Gemini, lalu pilih Canvas.");
+});
+
+$("bukacanvas").addEventListener("click", () => {
+  window.open("https://gemini.google.com/app", "_blank");
+  log("Di Gemini: tekan ikon + lalu pilih Canvas. Tempel prompt, lalu salin kode dari Canvas dan tempel di kotak 'Tempel hasil Gemini Canvas'.");
+});
+
+// ---------- Helpers ----------
 
 async function api(method, url, headers = {}, body) {
   const opt = { method, headers: { ...headers } };
@@ -144,16 +248,6 @@ function makeKeystore(nama, pw) {
   return new Blob([arr], { type: "application/x-pkcs12" });
 }
 
-function buildPrompt(nama, fitur) {
-  return `Buatkan aplikasi Flutter untuk Android bernama "${nama}". Fitur utama: ${fitur || "aplikasi sederhana"}.
-Aturan:
-- Gunakan Material 3 dan hanya flutter/material.dart. Tanpa paket pihak ketiga.
-- Kode harus bisa dikompilasi tanpa error.
-- Teks di antarmuka dalam bahasa Indonesia.
-Tulis HANYA isi lengkap lib/main.dart, tanpa markdown dan tanpa penjelasan.`;
-}
-
-// Mengambil teks jawaban dari penyedia yang dipilih
 async function callAI(provider, key, model, baseUrl, prompt) {
   let text = "";
   if (provider === "anthropic") {
@@ -164,7 +258,6 @@ async function callAI(provider, key, model, baseUrl, prompt) {
     }, { model, max_tokens: 8000, messages: [{ role: "user", content: prompt }] });
     text = (r.content || []).filter(b => b.type === "text").map(b => b.text).join("");
   } else if (provider === "gemini") {
-    // Kunci dikirim lewat header, bukan di alamat URL
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
     const r = await api("POST", url, { "x-goog-api-key": key }, { contents: [{ parts: [{ text: prompt }] }] });
     text = ((r.candidates || [])[0]?.content?.parts || []).map(p => p.text || "").join("");
@@ -179,8 +272,27 @@ async function callAI(provider, key, model, baseUrl, prompt) {
   return text;
 }
 
-function cleanCode(text) {
-  return text.trim().replace(/^```[a-zA-Z]*\s*\n?/, "").replace(/\n?```\s*$/, "").trim() + "\n";
+// Mengambil file dari teks: bisa beberapa file dengan penanda, atau satu blok kode
+function parseFiles(text) {
+  const out = {};
+  const marks = [...text.matchAll(/^=== FILE: (.+?) ===\s*$/gm)];
+  if (!marks.length) {
+    const t = stripFence(text).trim();
+    if (/void\s+main\s*\(/.test(t)) out["lib/main.dart"] = t + "\n";
+    return out;
+  }
+  marks.forEach((m, i) => {
+    const name = m[1].trim();
+    if (!/^lib\/[a-zA-Z0-9_\/]+\.dart$/.test(name)) return;
+    const start = m.index + m[0].length;
+    const end = i + 1 < marks.length ? marks[i + 1].index : text.length;
+    out[name] = stripFence(text.slice(start, end)).trim() + "\n";
+  });
+  return out;
+}
+
+function stripFence(s) {
+  return s.replace(/^\s*```[a-zA-Z]*\s*\n/, "").replace(/\n\s*```\s*$/, "");
 }
 
 function defaultMain(nama) {
@@ -229,12 +341,32 @@ class _HalamanState extends State<Halaman> {
 `;
 }
 
+function pubspec(project, dirs) {
+  let y = `name: ${project}
+description: "Aplikasi Flutter otomatis"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
+`;
+  if (dirs.length) y += "  assets:\n" + dirs.map(d => `    - ${d}\n`).join("");
+  return y;
+}
+
 function cmYaml(appId, project, domain) {
   return `workflows:
   android-release:
     name: Android Release AAB
     instance_type: mac_mini_m2
-    max_build_duration: 30
+    max_build_duration: 45
     environment:
       flutter: stable
       vars:
@@ -292,57 +424,83 @@ function cmYaml(appId, project, domain) {
         script: flutter pub get
       - name: Build AAB
         script: flutter build appbundle --release
+      - name: Build APK
+        script: flutter build apk --release
     artifacts:
       - build/app/outputs/bundle/release/*.aab
+      - build/app/outputs/flutter-apk/*.apk
 `;
 }
+
+async function waitBuild(cmTok, bid) {
+  let b = {};
+  for (let i = 0; i < 120; i++) {
+    await sleep(30000);
+    const info = await api("GET", `https://api.codemagic.io/builds/${bid}`, cm(cmTok));
+    b = info.build || info;
+    log(`   status: ${b.status || "menunggu"}`);
+    if (["finished", "failed", "canceled", "timeout"].includes(b.status)) break;
+  }
+  return b;
+}
+
+// ---------- Alur utama ----------
 
 async function run(c) {
   const tok = c.gh.trim();
   const cmTok = c.cm.trim();
-  const provider = c.provider || "anthropic";
   const domain = (c.domain || "").trim().toLowerCase().replace(/\.$/, "");
+  const s = formSpec();
+  const provider = c.provider || "none";
 
   if (!/^[a-z][a-z0-9]*(\.[a-z][a-z0-9]*)+$/.test(domain)) throw new Error("Domain paket tidak valid. Contoh: com.budi (huruf kecil, tanpa spasi).");
-  if (domain.startsWith("com.example")) throw new Error("Jangan pakai com.example. Ganti dengan domain milikmu.");
-  if (provider !== "none") {
-    if (!c.key || !c.key.trim()) throw new Error(`API key ${PROVIDER_LABEL[provider]} belum diisi. Isi API key, atau pilih Tanpa AI.`);
+  if (domain.startsWith("com.example")) throw new Error("Jangan pakai com.example.");
+  if (!s.nama) throw new Error("Nama aplikasi belum diisi.");
+
+  // Cek token GitHub dulu
+  log("▶ 1/7 Mengecek token GitHub...");
+  const user = (await api("GET", "https://api.github.com/user", gh(tok))).login;
+  log(`   Login sebagai: ${user}`);
+
+  // Ambil kode: dari tempel manual, dari AI, atau kode contoh
+  log("▶ 2/7 Menyiapkan kode aplikasi...");
+  let files = {};
+  const manual = (c.manual || "").trim();
+  if (manual) {
+    files = parseFiles(manual);
+    log("   Sumber: kode tempel manual.");
+  } else if (provider !== "none") {
+    if (!c.key || !c.key.trim()) throw new Error(`API key ${PROVIDER_LABEL[provider]} belum diisi. Isi API key, atau ppakai Gemini Canvas lalu tempel kodenya.`);
     if (!c.model || !c.model.trim()) throw new Error("Model belum diisi.");
-    if (provider === "custom" && !(c.baseurl || "").trim()) throw new Error("Base URL API belum diisi untuk penyedia Lainnya.");
+    if (provider === "custom" && !(c.baseurl || "").trim()) throw new Error("Base URL API belum diisi.");
+    const prompt = (c.prompt || "").trim() || buildPrompt(s);
+    log(`   Meminta kode dari ${PROVIDER_LABEL[provider]} (model ${c.model.trim()}). Bisa 1 sampai 3 menit...`);
+    try {
+      files = parseFiles(await callAI(provider, c.key.trim(), c.model.trim(), c.baseurl, prompt));
+      log("   Kode diterima.");
+    } catch (e) {
+      throw new Error(`Panggilan ke ${PROVIDER_LABEL[provider]} gagal: ${e.message}. Coba model lain, atau pakai Gemini Canvas lalu tempel kodenya.`);
+    }
+  } else {
+    files = { "lib/main.dart": defaultMain(s.nama) };
+    log("   Sumber: kode contoh (tidak ada kode tempel dan tanpa AI).");
+  }
+  if (!files["lib/main.dart"] || !/void\s+main\s*\(/.test(files["lib/main.dart"])) {
+    throw new Error("lib/main.dart dengan fungsi main() tidak ditemukan. Tempel kode dari Gemini Canvas di kotak 'Tempel hasil Gemini Canvas', atau pilih penyedia AI.");
   }
 
-  // Cek token GitHub dulu sebelum memanggil AI atau membuat apa pun
-  const user = (await api("GET", "https://api.github.com/user", gh(tok))).login;
-
-  const project = c.nama.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "aplikasi";
+  const project = s.nama.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "aplikasi";
   const safeProject = /^[0-9]/.test(project) ? "app_" + project : project;
   const baseRepo = safeProject.replace(/_/g, "-");
   const appId = `${domain}.${safeProject.replace(/_/g, "")}`;
 
-  // Kode dibuat sebelum repo, supaya kalau AI gagal tidak ada repo kosong
-  let mainCode = defaultMain(c.nama);
-  if (provider !== "none") {
-    const label = PROVIDER_LABEL[provider];
-    log(`▶ 1/7 Meminta kode dari ${label} (model ${c.model.trim()}). Bisa 1 sampai 3 menit...`);
-    try {
-      const text = await callAI(provider, c.key.trim(), c.model.trim(), c.baseurl, buildPrompt(c.nama, c.fitur));
-      const code = cleanCode(text);
-      if (!/void\s+main\s*\(/.test(code)) throw new Error("jawaban tidak berisi fungsi main()");
-      mainCode = code;
-      log(`   Kode dari ${label} diterima.`);
-    } catch (e) {
-      throw new Error(`Panggilan ke ${label} gagal: ${e.message}. Coba model lain, atau pilih Tanpa AI.`);
-    }
-  } else {
-    log("▶ 1/7 Memakai kode contoh (tanpa AI)...");
-  }
-
-  log("▶ 2/7 Membuat repo GitHub privat...");
+  // Buat repo
+  log("▶ 3/7 Membuat repo GitHub privat...");
   let info = null, repo = baseRepo;
   for (let n = 0; n < 4 && !info; n++) {
     try {
       info = await api("POST", "https://api.github.com/user/repos", gh(tok),
-        { name: repo, private: true, auto_init: true, description: c.nama });
+        { name: repo, private: true, auto_init: true, description: s.nama });
     } catch (e) {
       if (!String(e.message).includes("HTTP 422")) throw e;
       repo = `${baseRepo}-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -366,38 +524,28 @@ async function run(c) {
     }
   };
 
-  log("▶ 3/7 Menulis file kode ke GitHub...");
-  await put("pubspec.yaml",
-`name: ${safeProject}
-description: Aplikasi Flutter otomatis.
-publish_to: 'none'
-version: 1.0.0+1
-
-environment:
-  sdk: '>=3.0.0 <4.0.0'
-
-dependencies:
-  flutter:
-    sdk: flutter
-
-flutter:
-  uses-material-design: true
-`, "Tambah pubspec");
-  await put("lib/main.dart", mainCode, "Kode aplikasi");
+  log("▶ 4/7 Menulis file ke GitHub...");
+  await put("pubspec.yaml", pubspec(safeProject, []), "Tambah pubspec");
+  for (const [path, text] of Object.entries(files)) {
+    await put(path, text, "Kode aplikasi: " + path);
+  }
   await put("codemagic.yaml", cmYaml(appId, safeProject, domain), "Konfigurasi Codemagic");
+  log(`   Ditulis: pubspec.yaml, codemagic.yaml, dan ${Object.keys(files).length} file kode.`);
 
-  log("▶ 4/7 Membuat keystore...");
+  // Keystore
+  log("▶ 5/7 Membuat keystore...");
   const pw = randPw();
-  const p12 = makeKeystore(c.nama, pw);
+  const p12 = makeKeystore(s.nama, pw);
   $("files").innerHTML = "";
   fileLink(`${repo}-upload-keystore.p12`, p12);
   fileLink(`${repo}-key.txt`, new Blob([`Alias: upload\nPassword: ${pw}\nPackage: ${appId}\n`], { type: "text/plain" }));
   $("box").style.display = "block";
-  log("⏸ Menunggu langkah manual: unduh kedua file di kotak kuning, upload keystore ke Codemagic, lalu tekan Lanjut.");
+  log("⏸ Langkah manual: unduh kedua file di kotak kuning, upload keystore ke Codemagic dengan reference upload_keystore, lalu tekan Lanjut.");
   await new Promise(r => { resumeFn = r; });
   $("box").style.display = "none";
 
-  log("▶ 5/7 Mendaftarkan app di Codemagic...");
+  // Daftar app
+  log("▶ 6/7 Mendaftarkan app dan memulai build...");
   let cmAppId = (c.app_id || "").trim();
   if (!cmAppId) {
     try {
@@ -410,38 +558,34 @@ flutter:
   if (!cmAppId) throw new Error("App ID Codemagic tidak didapat. Tambahkan app manual di Codemagic, isi App ID di form, lalu ulangi.");
   log(`   App ID: ${cmAppId}`);
 
-  log("▶ 6/7 Memicu build dan menunggu...");
   const start = await api("POST", "https://api.codemagic.io/builds", cm(cmTok),
     { appId: cmAppId, workflowId: "android-release", branch: "main" });
   const bid = start.buildId;
   if (!bid) throw new Error("Build tidak dimulai: " + JSON.stringify(start));
   const buildPage = `https://codemagic.io/app/${cmAppId}/build/${bid}`;
-  log(`   Build ID: ${bid}. Biasanya 5–15 menit.\n   Pantau di: ${buildPage}`);
+  log(`   Build ID: ${bid}\n   Pantau di: ${buildPage}`);
 
-  let b = {};
-  for (let i = 0; i < 90; i++) {
-    await sleep(30000);
-    const info2 = await api("GET", `https://api.codemagic.io/builds/${bid}`, cm(cmTok));
-    b = info2.build || info2;
-    log(`   status: ${b.status || "menunggu"}`);
-    if (["finished", "failed", "canceled", "timeout"].includes(b.status)) break;
-  }
+  const b = await waitBuild(cmTok, bid);
   if (b.status !== "finished") {
-    throw new Error(`Build berakhir dengan status ${b.status || "?"}. Buka ${buildPage}, salin error-nya, lalu kirim ke saya.`);
+    throw new Error(`Build berakhir dengan status ${b.status || "belum selesai"}. Buka ${buildPage}, salin error merahnya, lalu kirim ke saya.`);
   }
 
-  log("▶ 7/7 Mengunduh file AAB...");
-  const aab = (b.artifacts || []).find(a => (a.name || "").endsWith(".aab"));
-  if (!aab) throw new Error(`Build sukses tetapi .aab tidak ditemukan. Cek bagian Artifacts di ${buildPage}`);
-  try {
-    const r = await fetch(aab.url, { headers: cm(cmTok) });
-    if (!r.ok) throw new Error("HTTP " + r.status);
-    fileLink(`${repo}.aab`, await r.blob());
-    log("   File AAB siap diunduh di kotak kuning.");
-  } catch (e) {
-    log(`   ⚠ Unduh otomatis gagal (${e.message}). Unduh manual dari ${buildPage} → Artifacts.`);
+  // Unduh APK dan AAB
+  log("▶ 7/7 Mengunduh APK dan AAB...");
+  const arts = (b.artifacts || []).filter(a => /\.(apk|aab)$/i.test(a.name || ""));
+  if (!arts.length) throw new Error(`Build sukses, tetapi file APK/AAB tidak ditemukan. Cek bagian Artifacts di ${buildPage}`);
+  for (const a of arts) {
+    try {
+      const r = await fetch(a.url, { headers: cm(cmTok) });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      fileLink(a.name, await r.blob());
+      log(`   ✔ ${a.name} siap diunduh di kotak kuning.`);
+    } catch (e) {
+      log(`   ⚠ ${a.name} gagal diunduh otomatis. Unduh dari ${buildPage} → Artifacts.`);
+    }
   }
-  log("✅ Selesai! Langkah terakhir: upload file .aab ke Google Play Console secara manual.");
+  $("box").style.display = "block";
+  log("✅ Selesai! APK untuk tes di HP. AAB untuk Play Console.");
 }
 
 $("f").addEventListener("submit", async e => {
