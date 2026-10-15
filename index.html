@@ -1,0 +1,506 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Buat Aplikasi dan Game Android Otomatis</title>
+<script src="https://cdn.jsdelivr.net/npm/node-forge@1.3.1/dist/forge.min.js"></script>
+<style>
+  body{font-family:system-ui,sans-serif;max-width:680px;margin:auto;padding:16px;line-height:1.4}
+  label{display:block;font-weight:600;margin-top:12px}
+  input,textarea,select{width:100%;box-sizing:border-box;padding:8px;margin-top:4px;font-size:15px}
+  input[type=file]{padding:6px}
+  button{padding:10px 16px;margin-top:12px;font-size:15px;cursor:pointer;margin-right:6px}
+  #log{background:#111;color:#8f8;padding:12px;white-space:pre-wrap;min-height:160px;border-radius:6px;margin-top:16px;font-size:13px}
+  .box{background:#fff8dc;border:1px solid #e0c060;padding:12px;border-radius:6px;margin-top:12px;display:none}
+  .box a{display:block;margin-top:8px}
+  .small{font-size:13px;color:#555;font-weight:normal}
+  .result{background:#eef7ee;border:1px solid #9c9;padding:12px;border-radius:6px;margin-top:12px;display:none}
+  .result a{display:block;margin-top:8px;font-size:16px}
+</style>
+</head>
+<body>
+<h2>Buat Aplikasi dan Game Android Otomatis</h2>
+
+<form id="f">
+  <label>Token GitHub (scope: repo)</label>
+  <input name="gh" type="password" required>
+
+  <label>Token Codemagic</label>
+  <input name="cm" type="password" required>
+
+  <label>Team ID Codemagic <span class="small">(opsional. Biasanya otomatis. Jika gagal, isi dari alamat codemagic.io/teams/ID)</span></label>
+  <input name="team_id">
+
+  <label>Jenis</label>
+  <select name="jenis" id="jenis">
+    <option value="app">Aplikasi biasa</option>
+    <option value="game_sederhana">Game 2D sederhana (tanpa paket)</option>
+    <option value="game_flame">Game 2D dengan Flame (gambar, animasi, fisika)</option>
+  </select>
+
+  <label>Penyedia AI</label>
+  <select name="provider" id="provider">
+    <option value="anthropic">Anthropic (Claude)</option>
+    <option value="gemini">Google Gemini</option>
+    <option value="openai">OpenAI (ChatGPT)</option>
+    <option value="custom">Lainnya (kompatibel OpenAI, mis. DeepSeek, Groq)</option>
+    <option value="none">Tanpa AI (kode contoh sederhana)</option>
+  </select>
+
+  <label>Base URL API <span class="small">(hanya untuk Lainnya, contoh: https://api.deepseek.com/v1)</span></label>
+  <input name="baseurl" id="baseurl" placeholder="https://api.deepseek.com/v1">
+
+  <label>Model <span class="small">(ganti jika ada model baru. Untuk Lainnya, isi manual)</span></label>
+  <input name="model" id="model">
+
+  <label>API key AI <span class="small">(kosongkan jika tanpa AI)</span></label>
+  <input name="key" type="password">
+
+  <label>Nama aplikasi</label>
+  <input name="nama" required placeholder="Catatan Harian atau Kucing Lompat">
+
+  <label>Fitur atau deskripsi <span class="small">(makin rinci, makin baik)</span></label>
+  <textarea name="fitur" rows="5" placeholder="Aplikasi: catat tulisan harian dengan judul dan tanggal, cari, edit, dan hapus.
+Game: seekor kucing melompati rintangan, skor bertambah tiap rintangan terlewati, game over jika menabrak."></textarea>
+
+  <label>Paket tambahan <span class="small">(satu per baris, format nama: versi)</span></label>
+  <textarea name="deps" id="deps" rows="2" placeholder="flame: ^1.18.0"></textarea>
+
+  <label>Aset: gambar, suara, atau file lain <span class="small">(opsional)</span></label>
+  <input id="assets" type="file" multiple accept="image/*,audio/*,.json,.txt">
+  <div class="small">Gambar masuk ke assets/images/, suara ke assets/audio/. Gunakan nama file tanpa spasi, misalnya kucing.png.</div>
+
+  <label>Tempel hasil AI <span class="small">(opsional, jika AI tidak bisa dipanggil dari browser)</span></label>
+  <textarea name="manual" rows="4" placeholder="Tempel seluruh jawaban AI, termasuk baris === FILE: lib/main.dart ==="></textarea>
+
+  <label>Domain paket (huruf kecil, unik)</label>
+  <input name="domain" required value="com.namadomainmu" placeholder="com.budi">
+
+  <label>Codemagic App ID <span class="small">(opsional. Kosongkan jika aplikasi baru)</span></label>
+  <input name="app_id">
+
+  <button type="submit" id="mulai">Mulai</button>
+  <button type="button" id="copyprompt">Salin prompt untuk AI lain</button>
+</form>
+
+<div class="box" id="box">
+  <b>Langkah manual (hanya jika upload otomatis gagal):</b><br>
+  1. Unduh kedua file di bawah.<br>
+  2. Di Codemagic: Team settings → Code signing identities → Android keystore → Add keystore.<br>
+  3. Upload file <code>.p12</code>. Reference name huruf kecil semua: <b>upload_keystore</b><br>
+  4. Alias: <b>upload</b>. Keystore password dan Key password: isi dari file key.txt.<br>
+  5. Simpan, lalu tekan tombol di bawah.
+  <div id="files"></div>
+  <button id="lanjut">Lanjut (keystore sudah diupload)</button>
+</div>
+
+<div class="result" id="result">
+  <b>Hasil build siap diunduh:</b>
+  <div id="downloads"></div>
+</div>
+
+<div id="log">Belum berjalan.</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const logEl = $("log");
+const log = m => { logEl.textContent += "\n" + m; logEl.scrollTop = logEl.scrollHeight; };
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const enc = s => btoa(unescape(encodeURIComponent(s)));
+let resumeFn = null;
+
+const MODEL_DEFAULT = { anthropic: "claude-sonnet-5-5", openai: "gpt-4o", gemini: "gemini-2.5-flash", custom: "" };
+const PROVIDER_LABEL = { anthropic: "Anthropic", gemini: "Google Gemini", openai: "OpenAI", custom: "penyedia lain" };
+const JENIS_DEPS = { app: "", game_sederhana: "", game_flame: "flame: ^1.18.0" };
+const JENIS_LABEL = {
+  app: "Aplikasi Flutter biasa dengan Material 3.",
+  game_sederhana: "Game 2D sederhana memakai Flutter saja: CustomPaint, Ticker atau AnimationController, dan GestureDetector atau Listener. Jangan memakai paket pihak ketiga.",
+  game_flame: "Game 2D memakai paket flame. Gunakan GameWidget dan kelas yang meng-extend FlameGame. Untuk gambar, gunakan SpriteComponent atau SpriteAnimationComponent dengan images.load. Ikuti API Flame sesuai versi paket."
+};
+
+function syncProvider() {
+  const p = $("provider").value;
+  $("model").value = MODEL_DEFAULT[p] || "";
+}
+function syncJenis() { $("deps").value = JENIS_DEPS[$("jenis").value] || ""; }
+$("provider").addEventListener("change", syncProvider);
+$("jenis").addEventListener("change", syncJenis);
+syncProvider();
+syncJenis();
+
+async function http(method, url, headers = {}, body) {
+  const opt = { method, headers: { ...headers } };
+  if (body !== undefined) {
+    opt.body = JSON.stringify(body);
+    opt.headers["Content-Type"] = "application/json";
+  }
+  const r = await fetch(url, opt);
+  const t = await r.text();
+  if (!r.ok) throw new Error(`HTTP ${r.status} ${url}: ${t.slice(0, 300)}`);
+  try { return JSON.parse(t); } catch { return t; }
+}
+
+const gh = t => ({ "Authorization": `Bearer ${t}`, "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" });
+const cm = t => ({ "x-auth-token": t });
+
+function fileLink(name, blob) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.textContent = "⬇ Unduh " + name;
+  $("files").appendChild(a);
+}
+
+function resultLink(name, blob) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.textContent = "⬇ Unduh " + name;
+  $("downloads").appendChild(a);
+  $("result").style.display = "block";
+}
+
+function randPw() {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+  return Array.from(crypto.getRandomValues(new Uint32Array(16)), x => chars[x % chars.length]).join("");
+}
+
+function makeKeystore(nama, pw) {
+  const keys = forge.pki.rsa.generateKeyPair(2048);
+  const cert = forge.pki.createCertificate();
+  cert.publicKey = keys.publicKey;
+  cert.serialNumber = "01" + Date.now().toString(16);
+  cert.validity.notBefore = new Date();
+  cert.validity.notAfter = new Date();
+  cert.validity.notAfter.setFullYear(cert.validity.notBefore.getFullYear() + 27);
+  const attrs = [{ name: "commonName", value: nama }];
+  cert.setSubject(attrs);
+  cert.setIssuer(attrs);
+  cert.sign(keys.privateKey, forge.md.sha256.create());
+  const p12 = forge.pkcs12.toPkcs12Asn1(keys.privateKey, [cert], pw, { friendlyName: "upload" });
+  const bin = forge.asn1.toDer(p12).getBytes();
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return new Blob([arr], { type: "application/x-pkcs12" });
+}
+
+function readB64(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result.split(",")[1]);
+    r.onerror = () => rej(new Error("Gagal membaca " + file.name));
+    r.readAsDataURL(file);
+  });
+}
+
+function assetPath(name, type) {
+  const clean = name.toLowerCase().replace(/[^a-z0-9._-]+/g, "_");
+  if (type.startsWith("image/")) return "assets/images/" + clean;
+  if (type.startsWith("audio/")) return "assets/audio/" + clean;
+  return "assets/" + clean;
+}
+
+function buildPubspec(project, depsText, dirs) {
+  const deps = depsText.split("\n").map(s => s.trim()).filter(Boolean);
+  for (const d of deps) {
+    if (!/^[a-z][a-z0-9_]*:\s*\S+$/.test(d)) {
+      throw new Error(`Format paket salah: "${d}". Tulis satu per baris, contoh: flame: ^1.18.0`);
+    }
+  }
+  let y = `name: ${project}
+description: "Aplikasi Flutter otomatis"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+`;
+  for (const d of deps) y += `  ${d}\n`;
+  y += `
+flutter:
+  uses-material-design: true
+`;
+  if (dirs.length) {
+    y += "  assets:\n";
+    for (const d of dirs) y += `    - ${d}\n`;
+  }
+  return y;
+}
+
+function buildPrompt(p) {
+  const assetText = p.assets && p.assets.length
+    ? `Aset yang sudah tersedia (gunakan nama ini persis, jangan membuat aset baru):\n${p.assets.map(a => "- " + a).join("\n")}\nUntuk gambar, cukup tulis nama filenya saat memuat, misalnya images.load('nama.png'). Untuk audio, gunakan path assets/audio/.`
+    : "Tidak ada aset tambahan. Gambar dibuat dari kode (CustomPaint atau bentuk dasar).";
+  const depsText = (p.deps || "").trim()
+    ? `Paket pihak ketiga yang diizinkan (hanya ini): ${p.deps.trim().split("\n").map(s => s.split(":")[0].trim()).join(", ")}`
+    : "Tidak ada paket pihak ketiga. Hanya gunakan Flutter SDK.";
+  return `Buatkan aplikasi Flutter untuk Android bernama "${p.nama}".
+
+Jenis: ${JENIS_LABEL[p.jenis] || JENIS_LABEL.app}
+
+Fitur dan deskripsi:
+${p.fitur}
+
+${depsText}
+${assetText}
+
+Aturan wajib:
+- Kode harus bisa dikompilasi tanpa error. Periksa import, tanda kurung, tipe data, dan nama variabel.
+- File lib/main.dart wajib ada dan berisi fungsi main().
+- Kode boleh dipecah ke beberapa file di bawah lib/, misalnya lib/models/, lib/screens/, atau lib/game/.
+- Sertakan penanganan keadaan kosong dan validasi input dasar.
+- Semua teks di antarmuka memakai bahasa Indonesia.
+- Untuk game, gunakan loop atau Ticker untuk animasi dan simpan skor di memori.
+
+Format jawaban (WAJIB):
+- Pisahkan setiap file dengan baris penanda persis seperti ini: === FILE: lib/main.dart ===
+- Setelah penanda, tulis isi file lengkap.
+- Jangan memakai markdown (tanpa tanda backtick) dan jangan menulis penjelasan di luar file.
+- Jangan menulis file pubspec.yaml atau file di luar lib/.
+
+Contoh format:
+=== FILE: lib/main.dart ===
+(isi file main.dart)
+=== FILE: lib/game/pemain.dart ===
+(isi file pemain.dart)`;
+}
+
+async function callAI(provider, key, model, baseUrl, prompt) {
+  if (provider === "anthropic") {
+    const r = await http("POST", "https://api.anthropic.com/v1/messages", {
+      "x-api-key": key,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true"
+    }, { model, max_tokens: 8000, messages: [{ role: "user", content: prompt }] });
+    return (r.content || []).filter(b => b.type === "text").map(b => b.text).join("");
+  }
+  if (provider === "gemini") {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`;
+    const r = await http("POST", url, {}, { contents: [{ parts: [{ text: prompt }] }] });
+    return ((r.candidates || [])[0]?.content?.parts || []).map(p => p.text || "").join("");
+  }
+  const base = provider === "openai" ? "https://api.openai.com/v1" : baseUrl.trim().replace(/\/+$/, "");
+  if (!base) throw new Error("Base URL API belum diisi");
+  const r = await http("POST", `${base}/chat/completions`, { "Authorization": `Bearer ${key}` },
+    { model, messages: [{ role: "user", content: prompt }] });
+  return r.choices?.[0]?.message?.content || "";
+}
+
+function stripFence(s) {
+  return s.replace(/^\s*```[a-zA-Z]*\s*\n/, "").replace(/\n\s*```\s*$/, "");
+}
+
+function parseFiles(text) {
+  const out = {};
+  const marks = [...text.matchAll(/^=== FILE: (.+?) ===\s*$/gm)];
+  if (!marks.length) {
+    const t = stripFence(text).trim();
+    if (/void\s+main\s*\(/.test(t)) out["lib/main.dart"] = t + "\n";
+    return out;
+  }
+  marks.forEach((m, i) => {
+    const name = m[1].trim();
+    if (!/^lib\/[a-zA-Z0-9_\/]+\.dart$/.test(name)) return;
+    const start = m.index + m[0].length;
+    const end = i + 1 < marks.length ? marks[i + 1].index : text.length;
+    out[name] = stripFence(text.slice(start, end)).trim() + "\n";
+  });
+  return out;
+}
+
+function defaultMain(nama) {
+  const judul = nama.replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/\$/g, "\\$");
+  return `import 'package:flutter/material.dart';
+
+void main() => runApp(const AplikasiSaya());
+
+class AplikasiSaya extends StatelessWidget {
+  const AplikasiSaya({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(colorSchemeSeed: Colors.indigo, useMaterial3: true),
+      home: const Halaman(),
+    );
+  }
+}
+
+class Halaman extends StatefulWidget {
+  const Halaman({super.key});
+
+  @override
+  State<Halaman> createState() => _HalamanState();
+}
+
+class _HalamanState extends State<Halaman> {
+  int hitung = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('${judul}')),
+      body: Center(
+        child: Text('Anda menekan $hitung kali', style: const TextStyle(fontSize: 20)),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => setState(() => hitung++),
+        child: const Icon(Icons.add),
+      ),
+    );
+  }
+}
+`;
+}
+
+function cmYaml(appId, project, domain) {
+  return `workflows:
+  android-release:
+    name: Android Release AAB
+    instance_type: mac_mini_m2
+    max_build_duration: 45
+    environment:
+      flutter: stable
+      vars:
+        APP_ID: "${appId}"
+        PROJECT_NAME: "${project}"
+        ORG: "${domain}"
+      android_signing:
+        - upload_keystore
+    scripts:
+      - name: Buat folder Android
+        script: |
+          rm -rf /tmp/gen
+          flutter create --platforms=android --project-name $PROJECT_NAME --org $ORG /tmp/gen
+          cp -r /tmp/gen/android .
+      - name: Atur package dan signing release
+        script: |
+          python3 - <<'PY'
+          import os, pathlib, re
+          app = os.environ["APP_ID"]
+          for n in ["android/app/build.gradle.kts", "android/app/build.gradle"]:
+              p = pathlib.Path(n)
+              if p.exists():
+                  break
+          else:
+              raise SystemExit("build.gradle tidak ditemukan")
+          s = p.read_text()
+          s = re.sub(r'(applicationId\\s*=?\\s*)"[^"]*"', lambda m: m.group(1) + '"' + app + '"', s)
+          if p.suffix == ".kts":
+              block = '''signingConfigs {
+                  create("release") {
+                      storeFile = file(System.getenv("CM_KEYSTORE_PATH"))
+                      storePassword = System.getenv("CM_KEYSTORE_PASSWORD")
+                      keyAlias = System.getenv("CM_KEY_ALIAS")
+                      keyPassword = System.getenv("CM_KEY_PASSWORD")
+                  }
+              }
+              '''
+              s = s.replace('signingConfigs.getByName("debug")', 'signingConfigs.getByName("release")')
+          else:
+              block = '''signingConfigs {
+                  release {
+                      storeFile file(System.getenv("CM_KEYSTORE_PATH"))
+                      storePassword System.getenv("CM_KEYSTORE_PASSWORD")
+                      keyAlias System.getenv("CM_KEY_ALIAS")
+                      keyPassword System.getenv("CM_KEY_PASSWORD")
+                  }
+              }
+              '''
+              s = s.replace('signingConfig signingConfigs.debug', 'signingConfig signingConfigs.release')
+          s = s.replace('buildTypes {', block + 'buildTypes {', 1)
+          p.write_text(s)
+          print("OK:", p)
+          PY
+      - name: Install packages
+        script: flutter pub get
+      - name: Build AAB
+        script: flutter build appbundle --release
+      - name: Build APK
+        script: flutter build apk --release
+    artifacts:
+      - build/app/outputs/bundle/release/*.aab
+      - build/app/outputs/flutter-apk/*.apk
+`;
+}
+
+async function findTeamId(cmTok, manual) {
+  if (manual && manual.trim()) return manual.trim();
+  try {
+    const r = await http("GET", "https://api.codemagic.io/teams", cm(cmTok));
+    const list = Array.isArray(r) ? r : (r.teams || r.items || []);
+    if (list.length) return list[0]._id || list[0].id || null;
+  } catch (e) {
+    log("   ⚠ Team ID tidak bisa diambil otomatis: " + e.message.slice(0, 120));
+  }
+  return null;
+}
+
+// Endpoint ini BELUM terverifikasi. Jika gagal, halaman kembali ke langkah manual.
+async function uploadKeystoreAuto(cmTok, teamId, p12Blob, pw, alias) {
+  const fd = new FormData();
+  fd.append("file", p12Blob, "upload-keystore.p12");
+  fd.append("reference", "upload_keystore");
+  fd.append("keystore_password", pw);
+  fd.append("key_alias", alias);
+  fd.append("key_password", pw);
+  const r = await fetch(`https://api.codemagic.io/teams/${teamId}/code-signing-identities/android-keystores`, {
+    method: "POST",
+    headers: { "x-auth-token": cmTok },
+    body: fd
+  });
+  const t = await r.text();
+  if (!r.ok) throw new Error(`HTTP ${r.status}: ${t.slice(0, 200)}`);
+  return true;
+}
+
+async function waitBuild(cmTok, bid) {
+  let b = {};
+  for (let i = 0; i < 120; i++) {
+    await sleep(30000);
+    const info = await http("GET", `https://api.codemagic.io/builds/${bid}`, cm(cmTok));
+    b = info.build || info;
+    log(`   status: ${b.status || "menunggu"}`);
+    if (["finished", "failed", "canceled", "timeout"].includes(b.status)) break;
+  }
+  return b;
+}
+
+async function downloadArtifacts(cmTok, b, buildPage) {
+  const arts = (b.artifacts || []).filter(a => /\.(aab|apk)$/i.test(a.name || ""));
+  if (!arts.length) {
+    log(`   ⚠ AAB/APK tidak ditemukan di data API. Buka ${buildPage} → Artifacts.`);
+    return;
+  }
+  for (const a of arts) {
+    try {
+      const r = await fetch(a.url, { headers: cm(cmTok) });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      resultLink(a.name, await r.blob());
+      log(`   ✔ ${a.name} siap diunduh.`);
+    } catch (e) {
+      log(`   ⚠ ${a.name} gagal diunduh otomatis (${e.message.slice(0, 80)}).`);
+      const link = document.createElement("a");
+      link.href = buildPage;
+      link.target = "_blank";
+      link.textContent = "Buka halaman build untuk unduh " + a.name;
+      $("downloads").appendChild(link);
+      $("result").style.display = "block";
+    }
+  }
+}
+
+async function run(c, assetFiles) {
+  const tok = c.gh.trim();
+  const cmTok = c.cm.trim();
+  const domain = (c.domain || "").trim().toLowerCase().replace(/\.$/, "");
+  if (!/^[a-z][a-z0-9]*(\.[a-z][a-z0-9]*)+$/.test(domain)) throw new Error("Domain paket tidak valid. Contoh: com.budi (huruf kecil, tanpa spasi).");
+  if (domain.startsWith("com.example")) throw new Error("Jangan pakai com.example. Ganti dengan domain milikmu.");
+
+  const project = c.nama.toL
